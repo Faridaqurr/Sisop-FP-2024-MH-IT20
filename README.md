@@ -5,7 +5,7 @@
   
   - Jika tidak ada user lain dalam sistem, user pertama yang mendaftar otomatis mendapatkan role "ROOT". Username harus bersifat unique dan password wajib di encrypt menggunakan menggunakan bcrypt.
 
-![image](https://github.com/Faridaqurr/Sisop-FP-2024-MH-IT20/assets/150933246/de6c0c9a-2a90-4ec4-8866-005e8805d555)
+![image](https://github.com/Faridaqurr/Sisop-FP-2024-MH-IT20/assets/150933246/f37c25cf-72bb-4ec1-bad1-75c9ccd98076)
 
 ![image](https://github.com/Faridaqurr/Sisop-FP-2024-MH-IT20/assets/150933246/26630e2c-8033-4b3e-bd50-dfa356ae932e)
 
@@ -18,25 +18,15 @@
   
   - User: Dapat mengirim pesan chat, melihat channel, dan room. user menjadi admin di channel yang mereka buat.
 
+![image](https://github.com/Faridaqurr/Sisop-FP-2024-MH-IT20/assets/150933246/ffb7f140-3471-42c7-8806-fc6f0e748f68)
 
-![image](https://github.com/Faridaqurr/Sisop-FP-2024-MH-IT20/assets/150933246/810f1a95-797d-4b16-9654-20317b052d23)
-
-**Setelah Masuk Channel user dapat melihat list room dan pengguna dalam channel tersebut**
-
-![image](https://github.com/Faridaqurr/Sisop-FP-2024-MH-IT20/assets/150933246/e9cb7d5c-af1e-427d-ba76-f5d92c8eeb2e)
-
-![image](https://github.com/Faridaqurr/Sisop-FP-2024-MH-IT20/assets/150933246/ffaff174-1b6d-4c28-a0dd-ff4607be533c)
-
-Ketika user pertama kali masuk ke channel, mereka memiliki akses terbatas. Jika mereka telah masuk sebelumnya, akses mereka meningkat sesuai dengan admin dan root.
-
-![image](https://github.com/Faridaqurr/Sisop-FP-2024-MH-IT20/assets/150933246/9b3d92f3-4e69-477c-a56f-1bad5c8e5fd2)
+![image](https://github.com/Faridaqurr/Sisop-FP-2024-MH-IT20/assets/150933246/acef0958-c079-43f6-b980-12bfac2eed9a)
 
 User dapat masuk ke room setelah bergabung dengan channel.
 
 ![image](https://github.com/Faridaqurr/Sisop-FP-2024-MH-IT20/assets/150933246/439e2a31-53e9-4060-88f7-f98c07b69dee)
 
-![image](https://github.com/Faridaqurr/Sisop-FP-2024-MH-IT20/assets/150933246/14ee72c3-c9a9-4b2c-afab-db3fa9419a99)
-![image](https://github.com/Faridaqurr/Sisop-FP-2024-MH-IT20/assets/150933246/c0a38da0-19b3-4901-85e9-fc6dabfff80e)
+![image](https://github.com/Faridaqurr/Sisop-FP-2024-MH-IT20/assets/150933246/191b8d25-b8a0-48f8-b547-7cd586d8349a)
 
 **C. Root**
   - Akun yang pertama kali mendaftar otomatis mendapatkan peran "root".
@@ -54,8 +44,7 @@ User dapat masuk ke room setelah bergabung dengan channel.
 
 ![image](https://github.com/Faridaqurr/Sisop-FP-2024-MH-IT20/assets/150933246/106df332-a236-4636-bd17-d8ada5334957)
 
-![image](https://github.com/Faridaqurr/Sisop-FP-2024-MH-IT20/assets/150933246/f7b01cbc-c29a-45b3-8dc6-7f17a78fb43a)
-![image](https://github.com/Faridaqurr/Sisop-FP-2024-MH-IT20/assets/150933246/edd872df-ac43-4f67-9b2e-67703d860860)
+![image](https://github.com/Faridaqurr/Sisop-FP-2024-MH-IT20/assets/150933246/5356cfb3-2d49-41e9-9d94-b5dd381c83b5)
 
 ![image](https://github.com/Faridaqurr/Sisop-FP-2024-MH-IT20/assets/150933246/f90414fa-5a02-4a42-8cbb-a20f12d1f37a)
 
