@@ -1,4 +1,13 @@
-# Soal Final Project
+# FINAL PROJECT SISTEM OPERASI
+## Kelompok IT20
+### Anggota Kelompok :
+|             Nama              |     NRP    |
+|-------------------------------|------------|
+| Revalina Fairuzy Azhari Putri | 5027231001 |
+| Farida Qurrotu 'Ayuna         | 5027231015 |
+| Gallant Damas Hayuaji         | 5027231037 |
+
+## SOAL
 
 **A. Autentikasi**
   - Setiap user harus memiliki username dan password untuk mengakses DiscorIT. Username, password, dan global role disimpan dalam file user.csv.
@@ -82,3 +91,7 @@ Jika ada command yang tidak sesuai penggunaannya. Maka akan mengeluarkan pesan e
 ### Changelog
 
   - [13/06/2024] menambahkan penjelasan pada bagian Bagaimana Program Diakses
+
+## Hasil Pengerjaan
+
+
