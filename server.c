@@ -9,27 +9,11 @@
 #include <time.h>
 #include <pthread.h>
 #include <sys/stat.h>
+#include <dirent.h>
 
 #define PORT 8080
 
-typedef struct User {
-    char username[50];
-    char password[100];
-    char role[10];
-} User;
-
-typedef struct Channel {
-    char name[50];
-    struct Channel *next;
-} Channel;
-
-typedef struct Room {
-    char name[50];
-    struct Room *next;
-} Room;
-
-Channel *channels = NULL;
-
+// Function declarations
 void handle_client(int new_socket);
 void register_user(int new_socket, const char *username, const char *hashed_password);
 int user_exists(const char *username);
@@ -37,8 +21,8 @@ int user_password_matches(const char *username, const char *hashed_password);
 void list_channels(int new_socket);
 void list_rooms(int new_socket, const char *channel_name);
 void list_users(int new_socket, const char *channel_name);
-void join_channel(int new_socket, const char *username, const char *channel_name);
-void join_room(int new_socket, const char *channel_name, const char *room_name);
+void join_channel(int new_socket, const char *username, const char *channel_name, const char *key);
+void join_room(int new_socket, const char *username, const char *channel_name, const char *room_name);
 
 int main() {
     int server_fd, new_socket;
@@ -100,38 +84,110 @@ void handle_client(int new_socket) {
     printf("Received: %s\n", buffer);
 
     char *command = strtok(buffer, " ");
-    char *username = strtok(NULL, " ");
-    char *hashed_password = strtok(NULL, " ");
+    char *arg1 = strtok(NULL, " ");
+    char *arg2 = strtok(NULL, " ");
+    char *arg3 = strtok(NULL, " ");
 
     if (strcmp(command, "REGISTER") == 0) {
-        register_user(new_socket, username, hashed_password);
+        register_user(new_socket, arg1, arg2);
     } else if (strcmp(command, "LOGIN") == 0) {
-        if (user_password_matches(username, hashed_password)) {
+        if (user_password_matches(arg1, arg2)) {
             char response[256];
-            snprintf(response, sizeof(response), "%s berhasil login\n", username);
+            snprintf(response, sizeof(response), "%s berhasil login\n", arg1);
             send(new_socket, response, strlen(response), 0);
         } else {
             send(new_socket, "Invalid username or password\n", strlen("Invalid username or password\n"), 0);
         }
-    } else if (strcmp(command, "LIST CHANNEL") == 0) {
-        list_channels(new_socket);
-    } else if (strcmp(command, "LIST ROOM") == 0) {
-        char *channel_name = strtok(NULL, " ");
-        list_rooms(new_socket, channel_name);
-    } else if (strcmp(command, "LIST USER") == 0) {
-        char *channel_name = strtok(NULL, " ");
-        list_users(new_socket, channel_name);
-    } else if (strcmp(command, "JOIN CHANNEL") == 0) {
-        char *channel_name = strtok(NULL, " ");
-        join_channel(new_socket, username, channel_name);
-    } else if (strcmp(command, "JOIN ROOM") == 0) {
-        char *channel_name = strtok(NULL, " ");
-        char *room_name = strtok(NULL, " ");
-        join_room(new_socket, channel_name, room_name);
+    } else if (strcmp(command, "LIST") == 0) {
+        if (strcmp(arg1, "CHANNEL") == 0) {
+            list_channels(new_socket);
+        } else if (strcmp(arg1, "ROOM") == 0) {
+            list_rooms(new_socket, arg2);
+        } else if (strcmp(arg1, "USER") == 0) {
+            list_users(new_socket, arg2);
+        }
+    } else if (strcmp(command, "JOIN") == 0) {
+        if (arg1 && arg2 && !arg3) {
+            join_channel(new_socket, "default_user", arg2, arg1); // Assuming a logged-in user named "default_user"
+        } else if (arg1 && arg2 && arg3) {
+            join_room(new_socket, "default_user", arg1, arg3); // Assuming a logged-in user named "default_user"
+        }
     }
 
     printf("Client disconnected\n");
     close(new_socket);
+}
+
+void list_channels(int new_socket) {
+    DIR *d;
+    struct dirent *dir;
+    char response[1024] = {0};
+    d = opendir("DiscorIT");
+    if (d) {
+        while ((dir = readdir(d)) != NULL) {
+            if (dir->d_type == DT_DIR && strcmp(dir->d_name, ".") != 0 && strcmp(dir->d_name, "..") != 0) {
+                strcat(response, dir->d_name);
+                strcat(response, " ");
+            }
+        }
+        closedir(d);
+    } else {
+        perror("Could not open DiscorIT directory");
+        send(new_socket, "Failed to list channels\n", strlen("Failed to list channels\n"), 0);
+        return;
+    }
+
+    strcat(response, "\n");
+    send(new_socket, response, strlen(response), 0);
+}
+
+void list_rooms(int new_socket, const char *channel_name) {
+    char path[1024];
+    snprintf(path, sizeof(path), "DiscorIT/%s", channel_name);
+    DIR *d = opendir(path);
+    struct dirent *dir;
+    char response[1024] = {0};
+
+    if (d) {
+        while ((dir = readdir(d)) != NULL) {
+            if (dir->d_type == DT_DIR && strcmp(dir->d_name, ".") != 0 && strcmp(dir->d_name, "..") != 0) {
+                strcat(response, dir->d_name);
+                strcat(response, " ");
+            }
+        }
+        closedir(d);
+    } else {
+        snprintf(response, sizeof(response), "Channel %s not found\n", channel_name);
+        send(new_socket, response, strlen(response), 0);
+        return;
+    }
+
+    strcat(response, "\n");
+    send(new_socket, response, strlen(response), 0);
+}
+
+void list_users(int new_socket, const char *channel_name) {
+    char response[1024] = "Available users:\n";
+    // Implement the logic to list users
+    // ...
+    send(new_socket, response, strlen(response), 0);
+}
+
+void join_channel(int new_socket, const char *username, const char *channel_name, const char *key) {
+    char response[256];
+
+    // Implement logic to verify if the user already has access to the channel
+    // If the key is correct, increase access level
+    // ...
+
+    snprintf(response, sizeof(response), "%s joined channel %s\n", username, channel_name);
+    send(new_socket, response, strlen(response), 0);
+}
+
+void join_room(int new_socket, const char *username, const char *channel_name, const char *room_name) {
+    char response[256];
+    snprintf(response, sizeof(response), "%s joined room %s\n", username, room_name);
+    send(new_socket, response, strlen(response), 0);
 }
 
 void register_user(int new_socket, const char *username, const char *hashed_password) {
@@ -142,22 +198,18 @@ void register_user(int new_socket, const char *username, const char *hashed_pass
         return;
     }
 
-    // Open the file in append mode
     FILE *file = fopen("DiscorIT/users.csv", "a");
     if (file == NULL) {
         perror("Could not open users.csv");
         return;
     }
 
-    // Write the username and hashed password to the file
     fprintf(file, "%s,%s,USER\n", username, hashed_password);
-
-    // Close the file
     fclose(file);
+
     char response[256];
     snprintf(response, sizeof(response), "%s berhasil register\n", username);
     send(new_socket, response, strlen(response), 0);
-    printf("User %s registered with password hash %s\n", username, hashed_password);
 }
 
 int user_exists(const char *username) {
@@ -203,126 +255,4 @@ int user_password_matches(const char *username, const char *hashed_password) {
 
     fclose(file);
     return 0;
-}
-
-void list_channels(int new_socket) {
-    Channel *current = channels;
-    char response[1024] = {0};
-
-    while (current != NULL) {
-        strcat(response, current->name);
-        strcat(response, " ");
-        current = current->next;
-    }
-
-    send(new_socket, response, strlen(response), 0);
-}
-
-void list_rooms(int new_socket, const char *channel_name) {
-    Channel *current = channels;
-    char response[1024] = {0};
-
-    while (current != NULL) {
-        if (strcmp(current->name, channel_name) == 0) {
-            Room *room = current->rooms;
-            while (room != NULL) {
-                strcat(response, room->name);
-                strcat(response, " ");
-                room = room->next;
-            }
-            break;
-        }
-        current = current->next;
-    }
-
-    send(new_socket, response, strlen(response), 0);
-}
-
-void list_users(int new_socket, const char *channel_name) {
-    Channel *current = channels;
-    char response[1024] = {0};
-
-    while (current != NULL) {
-        if (strcmp(current->name, channel_name) == 0) {
-            User *user = current->users;
-            while (user != NULL) {
-                strcat(response, user->username);
-                strcat(response, " ");
-                user = user->next;
-            }
-            break;
-        }
-        current = current->next;
-    }
-
-    send(new_socket, response, strlen(response), 0);
-}
-
-void join_channel(int new_socket, const char *username, const char *channel_name) {
-    Channel *current = channels;
-    while (current != NULL) {
-        if (strcmp(current->name, channel_name) == 0) {
-            // Add user to channel
-            User *user = malloc(sizeof(User));
-            strcpy(user->username, username);
-            user->next = current->users;
-            current->users = user;
-
-            char response[256];
-            snprintf(response, sizeof(response), "%s joined channel %s\n", username, channel_name);
-            send(new_socket, response, strlen(response), 0);
-            return;
-        }
-        current = current->next;
-    }
-
-    // Channel not found, create a new one
-    Channel *new_channel = malloc(sizeof(Channel));
-    strcpy(new_channel->name, channel_name);
-    new_channel->next = channels;
-    new_channel->rooms = NULL;
-    new_channel->users = NULL;
-    channels = new_channel;
-
-    // Add user to new channel
-    User *user = malloc(sizeof(User));
-    strcpy(user->username, username);
-    user->next = new_channel->users;
-    new_channel->users = user;
-
-    char response[256];
-    snprintf(response, sizeof(response), "%s joined channel %s\n", username, channel_name);
-    send(new_socket, response, strlen(response), 0);
-}
-
-void join_room(int new_socket, const char *channel_name, const char *room_name) {
-    Channel *current = channels;
-    while (current != NULL) {
-        if (strcmp(current->name, channel_name) == 0) {
-            Room *room = current->rooms;
-            while (room != NULL) {
-                if (strcmp(room->name, room_name) == 0) {
-                    char response[256];
-                    snprintf(response, sizeof(response), "Joined room %s\n", room_name);
-                    send(new_socket, response, strlen(response), 0);
-                    return;
-                }
-                room = room->next;
-            }
-
-            // Room not found, create a new one
-            Room *new_room = malloc(sizeof(Room));
-            strcpy(new_room->name, room_name);
-            new_room->next = current->rooms;
-            current->rooms = new_room;
-
-            char response[256];
-            snprintf(response, sizeof(response), "Joined room %s\n", room_name);
-            send(new_socket, response, strlen(response), 0);
-            return;
-        }
-        current = current->next;
-    }
-
-    send(new_socket, "Channel not found\n", strlen("Channel not found\n"), 0);
 }
