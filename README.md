@@ -1704,4 +1704,24 @@ void list_users(int sock) {
 
 berfungsi untuk menangani proses daftar pengguna dengan mengirimkan daftar semua username yang ada dalam file .csv kepada klien
 
+### Proses
+1. Register dan Login
+
+![WhatsApp Image 2024-06-28 at 10 59 35 PM](https://github.com/Faridaqurr/Sisop-FP-2024-MH-IT20/assets/150936800/ba424cb9-0cb6-40e3-aed4-ae2169cce691)
+
+![WhatsApp Image 2024-06-28 at 11 00 10 PM](https://github.com/Faridaqurr/Sisop-FP-2024-MH-IT20/assets/150936800/9161f09f-94b4-40de-93d9-6a086ebc71a1)
+
+2. Mengidentifikasi role
+
+![WhatsApp Image 2024-06-28 at 11 00 45 PM](https://github.com/Faridaqurr/Sisop-FP-2024-MH-IT20/assets/150936800/a29cb57c-80b3-4ea0-9003-86db46a88362)
+
+3. Penggunaan Root
+
+![WhatsApp Image 2024-06-28 at 11 06 14 PM](https://github.com/Faridaqurr/Sisop-FP-2024-MH-IT20/assets/150936800/c89e4dd3-1e94-4ac2-8e8b-fe3452f1a8bb)
+
+4. Connecting Port
+
+![WhatsApp Image 2024-06-28 at 11 07 32 PM](https://github.com/Faridaqurr/Sisop-FP-2024-MH-IT20/assets/150936800/de42853e-619a-4e31-b457-0e123c89a861)
+
+
 ##Revisi
