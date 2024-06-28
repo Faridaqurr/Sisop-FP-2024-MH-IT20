@@ -1702,7 +1702,8 @@ void list_users(int sock) {
 }
 ```
 
-Fungsi ini akan mengirim daftar user/pengguna yang sudah register ke klien. Fungsi membaca file users.csv dan mengirimkan username yang ditemukan ke klien.
+Fungsi ini akan mengirim daftar user/pengguna yang sudah register ke klien. Fungsi membaca file users.csv dan mengirimkan username yang ditemukan ke klien. berfungsi untuk menangani proses daftar pengguna dengan mengirimkan daftar semua username yang ada dalam file .csv kepada klien
+
 
 8. `Remove User`
 ```
@@ -1761,8 +1762,249 @@ void remove_user(char *username, int sock) {
 
 Fungsi ini untuk menghapus user dari users.csv. Fungsi akan membaca file, mencari nama user yang sesuai, dan menghapus data tersebut.
 
+9. `ban user`
+```
+void ban_user(char *username, int sock) {
+    FILE *fp = fopen(USER_FILE, "r");
+    if (fp == NULL) {
+        perror("Unable to open users.csv");
+        return;
+    }
 
-berfungsi untuk menangani proses daftar pengguna dengan mengirimkan daftar semua username yang ada dalam file .csv kepada klien
+    FILE *ban_fp = fopen(BAN_FILE, "a+");
+    if (ban_fp == NULL) {
+        perror("Unable to open banned_users.csv");
+        fclose(fp);
+        return;
+    }
+
+    char line[256];
+    int user_found = 0;
+    while (fgets(line, sizeof(line), fp)) {
+        char stored_username[BUF_SIZE], stored_password[BUF_SIZE], stored_role[BUF_SIZE];
+        int id;
+        sscanf(line, "%d,%[^,],%[^,],%s", &id, stored_username, stored_password, stored_role);
+
+        if (strcmp(stored_username, username) == 0) {
+            fprintf(ban_fp, "%s\n", stored_username);
+            user_found = 1;
+            break;
+        }
+    }
+
+    fclose(fp);
+    fclose(ban_fp);
+
+    if (user_found) {
+        char response[] = "User banned successfully.\n";
+        write(sock, response, strlen(response));
+    } else {
+        char response[] = "User not found.\n";
+        write(sock, response, strlen(response));
+    }
+}
+```
+
+Fungsi `ban_user` digunakan untuk menambahkan user ke dalam daftar pengguna yang diban. Urutan fungsi adalah sebagai berikut:
+
+-Membuka File users.csv: Fungsi membuka file users.csv yang berisi daftar pengguna untuk memeriksa apakah pengguna yang akan diban ada dalam daftar tersebut.
+
+-Membuka atau Membuat File banned_users.csv: Fungsi membuka atau membuat file banned_users.csv yang berisi daftar pengguna yang diban.
+
+-Memeriksa dan Menambahkan Pengguna ke Daftar Ban: Fungsi membaca setiap baris di file users.csv untuk mencari pengguna dengan nama yang sesuai dengan yang diberikan. Jika ditemukan, pengguna ditambahkan ke banned_users.csv.
+
+-Mengirim Respon ke Klien: Setelah menambahkan pengguna ke daftar ban, fungsi mengirimkan pesan sukses atau pesan gagal jika pengguna tidak ditemukan.
+
+
+Ketika fungsi ban diimplementasikan, terdapat perubahan pada bagian `handle_login`. Jika pengguna diban, login akan ditolak. Modifikasi code adalah sebagai berikut:
+
+```
+int handle_login(char *username, char *password, Client *client) {
+    FILE *fp = fopen(USER_FILE, "r");
+    if (fp == NULL) {
+        perror("Unable to open users.csv");
+        return 0;
+    }
+
+    FILE *ban_fp = fopen(BAN_FILE, "r");
+    if (ban_fp != NULL) {
+        char ban_line[256];
+        while (fgets(ban_line, sizeof(ban_line), ban_fp)) {
+            char banned_username[BUF_SIZE];
+            sscanf(ban_line, "%s", banned_username);
+            if (strcmp(banned_username, username) == 0) {
+                fclose(fp);
+                fclose(ban_fp);
+                return 0; // User is banned
+            }
+        }
+        fclose(ban_fp);
+    }
+
+    char line[256];
+    while (fgets(line, sizeof(line), fp)) {
+        char stored_username[BUF_SIZE], stored_password[BUF_SIZE], stored_role[BUF_SIZE];
+        int id;
+        sscanf(line, "%d,%[^,],%[^,],%s", &id, stored_username, stored_password, stored_role);
+
+        if (strcmp(stored_username, username) == 0) {
+            if (strcmp(stored_password, password) == 0) {
+                client->user_id = id;
+                strcpy(client->username, username);
+                client->is_logged_in = 1;
+                fclose(fp);
+                return 1;
+            } else {
+                break;
+            }
+        }
+    }
+
+    fclose(fp);
+    return 0;
+}
+```
+
+10. `unban user`
+```
+void unban_user(char *username, int sock) {
+    FILE *ban_fp = fopen(BAN_FILE, "r");
+    if (ban_fp == NULL) {
+        perror("Unable to open banned_users.csv");
+        return;
+    }
+
+    FILE *temp_fp = fopen("/home/farida/sisophush/DiscorIT/banned_users_temp.csv", "w");
+    if (temp_fp == NULL) {
+        perror("Unable to open temporary banned users file");
+        fclose(ban_fp);
+        return;
+    }
+
+    char line[256];
+    int user_found = 0;
+    while (fgets(line, sizeof(line), ban_fp)) {
+        char stored_username[BUF_SIZE];
+        sscanf(line, "%s", stored_username);
+
+        if (strcmp(stored_username, username) == 0) {
+            user_found = 1;
+        } else {
+            fprintf(temp_fp, "%s\n", stored_username);
+        }
+    }
+
+    fclose(ban_fp);
+    fclose(temp_fp);
+
+    if (user_found) {
+        if (remove(BAN_FILE) != 0) {
+            perror("Failed to remove original banned users file");
+            return;
+        }
+
+        if (rename("/home/farida/sisophush/DiscorIT/banned_users_temp.csv", BAN_FILE) != 0) {
+            perror("Failed to rename temporary banned users file");
+            return;
+        }
+
+        char response[] = "User unbanned successfully.\n";
+        write(sock, response, strlen(response));
+    } else {
+        remove("/home/farida/sisophush/DiscorIT/banned_users_temp.csv");
+        char response[] = "User not found in ban list.\n";
+        write(sock, response, strlen(response));
+    }
+}
+```
+
+Fungsi `unban_user` digunakan untuk menghapus user dari daftar pengguna yang diban. Urutan dari fungsi adalah sebagai berikut:
+
+-Membuka File banned_users.csv: Fungsi membuka file banned_users.csv yang berisi daftar pengguna yang diban.
+-Membuka File Sementara: Fungsi membuka file sementara untuk menulis kembali daftar pengguna yang diban tanpa menyertakan pengguna yang di-unban.
+-Memeriksa dan Menghapus Pengguna dari Daftar Ban: Fungsi membaca setiap baris di banned_users.csv dan menyalin pengguna yang tidak diban ke file sementara. Jika pengguna yang akan di-unban ditemukan, fungsi tidak menyalinnya ke file sementara.
+-Mengganti File banned_users.csv: Fungsi mengganti file banned_users.csv dengan file sementara yang telah diperbarui.
+-Mengirim Respon ke Klien: Setelah menghapus pengguna dari daftar ban, fungsi mengirimkan pesan sukses atau pesan gagal jika pengguna tidak ditemukan dalam daftar ban.
+
+
+Setelah fungsi ban dan unban diimplementasikan, terdapat modifikasi pada bagian connection_handler sebagai berikut
+```
+void *connection_handler(void *socket_desc) {
+    int sock = *(int*)socket_desc;
+    int read_size;
+    char client_message[BUF_SIZE];
+    Client *client = &clients[client_count++];
+    client->socket = sock;
+    client->is_logged_in = 0;
+
+    while ((read_size = recv(sock, client_message, BUF_SIZE, 0)) > 0) {
+        client_message[read_size] = '\0';
+
+        if (strncmp(client_message, "REGISTER ", 9) == 0) {
+            char username[BUF_SIZE], password[BUF_SIZE];
+            sscanf(client_message + 9, "%s %s", username, password);
+            handle_register(username, password);
+        } else if (strncmp(client_message, "LOGIN ", 6) == 0) {
+            char username[BUF_SIZE], password[BUF_SIZE];
+            sscanf(client_message + 6, "%s %s", username, password);
+            if (handle_login(username, password, client)) {
+                char response[] = "Login successful.\n";
+                write(sock, response, strlen(response));
+            } else {
+                char response[] = "Login failed or user banned.\n";
+                write(sock, response, strlen(response));
+            }
+        } else if (strncmp(client_message, "CREATE CHANNEL ", 15) == 0) {
+            char channel_name[BUF_SIZE], key[BUF_SIZE];
+            sscanf(client_message + 15, "%s %s", channel_name, key);
+            if (create_channel(channel_name, key, client)) {
+                char response[] = "Channel created successfully.\n";
+                write(sock, response, strlen(response));
+            } else {
+                char response[] = "Channel creation failed.\n";
+                write(sock, response, strlen(response));
+            }
+        } else if (strncmp(client_message, "LIST USERS", 10) == 0) {
+            list_users(sock);
+        } else if (strncmp(client_message, "EDIT USER ", 10) == 0) {
+            char username[BUF_SIZE], new_username[BUF_SIZE], new_password[BUF_SIZE];
+            sscanf(client_message + 10, "%s %s %s", username, new_username, new_password);
+            edit_user(username, new_username, new_password, sock);
+        } else if (strncmp(client_message, "REMOVE USER ", 12) == 0) {
+            char username[BUF_SIZE];
+            sscanf(client_message + 12, "%s", username);
+            remove_user(username, sock);
+        } else if (strncmp(client_message, "BAN ", 4) == 0) {
+            char username[BUF_SIZE];
+            sscanf(client_message + 4, "%s", username);
+            ban_user(username, sock);
+        } else if (strncmp(client_message, "UNBAN ", 6) == 0) {
+            char username[BUF_SIZE];
+            sscanf(client_message + 6, "%s", username);
+            unban_user(username, sock);
+        } else {
+            char response[] = "Unknown command.\n";
+            write(sock, response, strlen(response));
+        }
+
+        memset(client_message, 0, BUF_SIZE);
+    }
+
+    if (read_size == 0) {
+        puts("Client disconnected");
+    } else if (read_size == -1) {
+        perror("recv failed");
+    }
+
+    free(socket_desc);
+    return 0;
+}
+
+```
+
+
+
+
 
 ### Proses
 1. Register dan Login
