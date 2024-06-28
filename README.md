@@ -1921,9 +1921,13 @@ void unban_user(char *username, int sock) {
 Fungsi `unban_user` digunakan untuk menghapus user dari daftar pengguna yang diban. Urutan dari fungsi adalah sebagai berikut:
 
 -Membuka File banned_users.csv: Fungsi membuka file banned_users.csv yang berisi daftar pengguna yang diban.
+
 -Membuka File Sementara: Fungsi membuka file sementara untuk menulis kembali daftar pengguna yang diban tanpa menyertakan pengguna yang di-unban.
+
 -Memeriksa dan Menghapus Pengguna dari Daftar Ban: Fungsi membaca setiap baris di banned_users.csv dan menyalin pengguna yang tidak diban ke file sementara. Jika pengguna yang akan di-unban ditemukan, fungsi tidak menyalinnya ke file sementara.
+
 -Mengganti File banned_users.csv: Fungsi mengganti file banned_users.csv dengan file sementara yang telah diperbarui.
+
 -Mengirim Respon ke Klien: Setelah menghapus pengguna dari daftar ban, fungsi mengirimkan pesan sukses atau pesan gagal jika pengguna tidak ditemukan dalam daftar ban.
 
 
