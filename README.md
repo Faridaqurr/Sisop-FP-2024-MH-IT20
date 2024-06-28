@@ -94,7 +94,7 @@ Jika ada command yang tidak sesuai penggunaannya. Maka akan mengeluarkan pesan e
 
 ## Hasil Pengerjaan
 
-###discorit.c
+### discorit.c
 ```
 #include <stdio.h>
 #include <stdlib.h>
@@ -415,3 +415,406 @@ int main(int argc, char const *argv[]) {
 ```
 
 Fungsi `main` yang ada pada code `discorit.c` tersebut berfungsi sebagai fungsi utama program, dimana ia mengatur koneksi ke server dan memulai proses login atau pendaftaran. Selain itu, ia juga memeriksa argumen, membuat socket, dan mengirim perintah register/login
+
+
+### monitor.c
+
+```
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <arpa/inet.h>
+#include <pthread.h>
+#include <sys/stat.h>
+#include <time.h>
+
+#define PORT 8080
+#define BUF_SIZE 1024
+#define DISCORIT_DIR "/home/revalina/final_project"
+#define MAX_CLIENTS 100
+
+typedef struct {
+    int socket;
+    char username[BUF_SIZE];
+    char channel[BUF_SIZE];
+    char room[BUF_SIZE];
+} client_t;
+
+client_t *clients[MAX_CLIENTS];
+pthread_mutex_t clients_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+void add_client(client_t *cl) {
+    pthread_mutex_lock(&clients_mutex);
+    for (int i = 0; i < MAX_CLIENTS; i++) {
+        if (!clients[i]) {
+            clients[i] = cl;
+            break;
+        }
+    }
+    pthread_mutex_unlock(&clients_mutex);
+}
+
+void remove_client(int socket) {
+    pthread_mutex_lock(&clients_mutex);
+    for (int i = 0; i < MAX_CLIENTS; i++) {
+        if (clients[i]) {
+            if (clients[i]->socket == socket) {
+                clients[i] = NULL;
+                break;
+            }
+        }
+    }
+    pthread_mutex_unlock(&clients_mutex);
+}
+
+void broadcast_message(const char *channel, const char *room, const char *message, int sender_socket) {
+    pthread_mutex_lock(&clients_mutex);
+    for (int i = 0; i < MAX_CLIENTS; i++) {
+        if (clients[i]) {
+            if (strcmp(clients[i]->channel, channel) == 0 && strcmp(clients[i]->room, room) == 0) {
+                if (clients[i]->socket != sender_socket) {
+                    send(clients[i]->socket, message, strlen(message), 0);
+                }
+            }
+        }
+    }
+    pthread_mutex_unlock(&clients_mutex);
+}
+
+void *handle_client(void *arg) {
+    char buffer[BUF_SIZE];
+    char username[BUF_SIZE];
+    char channel[BUF_SIZE];
+    char room[BUF_SIZE];
+    int leave_flag = 0;
+
+    client_t *cli = (client_t *)arg;
+
+    // Handle initial login or registration
+    int bytes_received = recv(cli->socket, buffer, BUF_SIZE, 0);
+    buffer[bytes_received] = '\0';
+
+    if (strncmp(buffer, "LOGIN ", 6) == 0 || strncmp(buffer, "REGISTER ", 9) == 0) {
+        // Extract username
+        sscanf(buffer, "%*s %s -p %*s", username);
+        strcpy(cli->username, username);
+
+        if (strncmp(buffer, "LOGIN ", 6) == 0) {
+            // Assume login is always successful for simplicity
+            snprintf(buffer, BUF_SIZE, "Login successful\n");
+        } else {
+            snprintf(buffer, BUF_SIZE, "Registered successfully\n");
+        }
+
+        send(cli->socket, buffer, strlen(buffer), 0);
+    }
+
+    while (1) {
+        if (leave_flag) {
+            break;
+        }
+
+        memset(buffer, 0, BUF_SIZE);
+        int bytes_received = recv(cli->socket, buffer, BUF_SIZE, 0);
+        buffer[bytes_received] = '\0';
+
+        if (strcmp(buffer, "EXIT") == 0) {
+            leave_flag = 1;
+        } else if (sscanf(buffer, "JOIN %s", channel) == 1) {
+            strcpy(cli->channel, channel);
+            snprintf(buffer, BUF_SIZE, "bergabung dengan channel %s\n", channel);
+            send(cli->socket, buffer, strlen(buffer), 0);
+        } else if (sscanf(buffer, "JOIN %s %s", channel, room) == 2) {
+            strcpy(cli->channel, channel);
+            strcpy(cli->room, room);
+            snprintf(buffer, BUF_SIZE, "bergabung dengan room %s\n", room);
+            send(cli->socket, buffer, strlen(buffer), 0);
+
+            // Monitor the chat file
+            char file_path[BUF_SIZE];
+            snprintf(file_path, sizeof(file_path), "%s/%s/%s/chat.csv", DISCORIT_DIR, channel, room);
+
+            FILE *file = fopen(file_path, "a");
+            if (file) {
+                time_t now = time(NULL);
+                struct tm *t = localtime(&now);
+                char time_str[20];
+                strftime(time_str, sizeof(time_str), "%Y-%m-%d %H:%M:%S", t);
+                fprintf(file, "INFO,%s,%s bergabung dengan room\n", time_str, cli->username);
+                fclose(file);
+            }
+        } else {
+            // Broadcast message to other clients in the same channel and room
+            snprintf(buffer + strlen(buffer), BUF_SIZE - strlen(buffer), " [%s]: %s", cli->username, buffer);
+            broadcast_message(cli->channel, cli->room, buffer, cli->socket);
+        }
+    }
+
+    // Client disconnects
+    close(cli->socket);
+    remove_client(cli->socket);
+    free(cli);
+
+    return NULL;
+}
+
+int main() {
+    int listen_socket, client_socket;
+    struct sockaddr_in server_addr, client_addr;
+    socklen_t client_len = sizeof(client_addr);
+    pthread_t tid;
+
+    // Initialize the server socket
+    listen_socket = socket(AF_INET, SOCK_STREAM, 0);
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_addr.s_addr = INADDR_ANY;
+    server_addr.sin_port = htons(PORT);
+
+    bind(listen_socket, (struct sockaddr *)&server_addr, sizeof(server_addr));
+    listen(listen_socket, 10);
+
+    printf("Server listening on port %d\n", PORT);
+
+    while (1) {
+        client_socket = accept(listen_socket, (struct sockaddr *)&client_addr, &client_len);
+
+        // Create a client struct
+        client_t *cli = (client_t *)malloc(sizeof(client_t));
+        cli->socket = client_socket;
+        memset(cli->username, 0, BUF_SIZE);
+        memset(cli->channel, 0, BUF_SIZE);
+        memset(cli->room, 0, BUF_SIZE);
+
+        // Add client to the clients array
+        add_client(cli);
+
+        // Create a thread to handle the client
+        pthread_create(&tid, NULL, &handle_client, (void *)cli);
+        pthread_detach(tid);
+    }
+
+    return 0;
+}
+```
+
+1. Header / LIbrary
+
+```
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <arpa/inet.h>
+#include <pthread.h>
+#include <sys/stat.h>
+#include <time.h>
+```
+
+Berikut beberapa header atau library yang kami gunakan dalam code `monitor.c` ini :
+- `stdio.h`: Digunakan untuk fungsi input/output seperti printf, sprintf, snprintf, dll.
+- `stdlib.h`: Digunakan untuk fungsi standar seperti malloc, free, exit, dll.
+- `string.h`: Digunakan untuk fungsi manipulasi string seperti strcpy, strcmp, strlen, dll.
+- `unistd.h`: Digunakan untuk fungsi POSIX seperti close, read, write, sleep, dll.
+- `arpa/inet.h`: Digunakan untuk fungsi dan struktur terkait jaringan seperti sockaddr_in, inet_addr, dll.
+- `pthread.h`: Digunakan untuk fungsi threading POSIX seperti pthread_create, pthread_mutex_lock, dll.
+- `sys/stat.h`: Digunakan untuk fungsi terkait status file seperti mkdir, stat, dll.
+- `time.h`: Digunakan untuk fungsi waktu seperti time, localtime, strftime, dll.
+
+2. Konstanta
+
+```
+#define PORT 8080
+#define BUF_SIZE 1024
+#define DISCORIT_DIR "/home/revalina/final_project"
+#define MAX_CLIENTS 100
+```
+
+Berikut beberapa konstanta yang kami gunakan dalam code `monitor.c` ini :
+- `PORT`: Port server mendengarkan koneksi.
+- `BUF_SIZE`: Ukuran buffer yang digunakan untuk membaca/mengirim data.
+- `DISCORIT_DIR`: Direktori dasar untuk menyimpan file chat.
+- `MAX_CLIENTS`: Jumlah maksimal klien yang bisa terhubung.
+
+3. `void add_client(client_t *cl)`
+
+```
+void add_client(client_t *cl) {
+    pthread_mutex_lock(&clients_mutex);
+    for (int i = 0; i < MAX_CLIENTS; i++) {
+        if (!clients[i]) {
+            clients[i] = cl;
+            break;
+        }
+    }
+    pthread_mutex_unlock(&clients_mutex);
+}
+```
+
+berfungsi untuk menambahkan klien ke array clients dengan menggunakan mutex untuk memastikan thread-safety.
+
+3. `void remove_client(int socket):`
+
+```
+void remove_client(int socket) {
+    pthread_mutex_lock(&clients_mutex);
+    for (int i = 0; i < MAX_CLIENTS; i++) {
+        if (clients[i]) {
+            if (clients[i]->socket == socket) {
+                clients[i] = NULL;
+                break;
+            }
+        }
+    }
+    pthread_mutex_unlock(&clients_mutex);
+}
+```
+
+berfungsi untuk menghapus klien dari array clients berdasarkan socket-nya.
+
+4. `void broadcast_message(const char *channel, const char *room, const char *message, int sender_socket)`
+
+```
+void broadcast_message(const char *channel, const char *room, const char *message, int sender_socket) {
+    pthread_mutex_lock(&clients_mutex);
+    for (int i = 0; i < MAX_CLIENTS; i++) {
+        if (clients[i]) {
+            if (strcmp(clients[i]->channel, channel) == 0 && strcmp(clients[i]->room, room) == 0) {
+                if (clients[i]->socket != sender_socket) {
+                    send(clients[i]->socket, message, strlen(message), 0);
+                }
+            }
+        }
+    }
+    pthread_mutex_unlock(&clients_mutex);
+}
+```
+
+berfungsi untuk mengirim pesan ke semua klien di channel dan room yang sama kecuali pengirim.
+
+5. `void handle_client(void *arg)`
+
+```
+void *handle_client(void *arg) {
+    char buffer[BUF_SIZE];
+    char username[BUF_SIZE];
+    char channel[BUF_SIZE];
+    char room[BUF_SIZE];
+    int leave_flag = 0;
+
+    client_t *cli = (client_t *)arg;
+
+    // Handle initial login or registration
+    int bytes_received = recv(cli->socket, buffer, BUF_SIZE, 0);
+    buffer[bytes_received] = '\0';
+
+    if (strncmp(buffer, "LOGIN ", 6) == 0 || strncmp(buffer, "REGISTER ", 9) == 0) {
+        // Extract username
+        sscanf(buffer, "%*s %s -p %*s", username);
+        strcpy(cli->username, username);
+
+        if (strncmp(buffer, "LOGIN ", 6) == 0) {
+            // Assume login is always successful for simplicity
+            snprintf(buffer, BUF_SIZE, "Login successful\n");
+        } else {
+            snprintf(buffer, BUF_SIZE, "Registered successfully\n");
+        }
+
+        send(cli->socket, buffer, strlen(buffer), 0);
+    }
+
+    while (1) {
+        if (leave_flag) {
+            break;
+        }
+
+        memset(buffer, 0, BUF_SIZE);
+        int bytes_received = recv(cli->socket, buffer, BUF_SIZE, 0);
+        buffer[bytes_received] = '\0';
+
+        if (strcmp(buffer, "EXIT") == 0) {
+            leave_flag = 1;
+        } else if (sscanf(buffer, "JOIN %s", channel) == 1) {
+            strcpy(cli->channel, channel);
+            snprintf(buffer, BUF_SIZE, "bergabung dengan channel %s\n", channel);
+            send(cli->socket, buffer, strlen(buffer), 0);
+        } else if (sscanf(buffer, "JOIN %s %s", channel, room) == 2) {
+            strcpy(cli->channel, channel);
+            strcpy(cli->room, room);
+            snprintf(buffer, BUF_SIZE, "bergabung dengan room %s\n", room);
+            send(cli->socket, buffer, strlen(buffer), 0);
+
+            // Monitor the chat file
+            char file_path[BUF_SIZE];
+            snprintf(file_path, sizeof(file_path), "%s/%s/%s/chat.csv", DISCORIT_DIR, channel, room);
+
+            FILE *file = fopen(file_path, "a");
+            if (file) {
+                time_t now = time(NULL);
+                struct tm *t = localtime(&now);
+                char time_str[20];
+                strftime(time_str, sizeof(time_str), "%Y-%m-%d %H:%M:%S", t);
+                fprintf(file, "INFO,%s,%s bergabung dengan room\n", time_str, cli->username);
+                fclose(file);
+            }
+        } else {
+            // Broadcast message to other clients in the same channel and room
+            snprintf(buffer + strlen(buffer), BUF_SIZE - strlen(buffer), " [%s]: %s", cli->username, buffer);
+            broadcast_message(cli->channel, cli->room, buffer, cli->socket);
+        }
+    }
+
+    // Client disconnects
+    close(cli->socket);
+    remove_client(cli->socket);
+    free(cli);
+
+    return NULL;
+}
+```
+
+berfungsi untuk menangani komunikasi dengan klien
+
+6. `main`
+
+```
+int main() {
+    int listen_socket, client_socket;
+    struct sockaddr_in server_addr, client_addr;
+    socklen_t client_len = sizeof(client_addr);
+    pthread_t tid;
+
+    // Initialize the server socket
+    listen_socket = socket(AF_INET, SOCK_STREAM, 0);
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_addr.s_addr = INADDR_ANY;
+    server_addr.sin_port = htons(PORT);
+
+    bind(listen_socket, (struct sockaddr *)&server_addr, sizeof(server_addr));
+    listen(listen_socket, 10);
+
+    printf("Server listening on port %d\n", PORT);
+
+    while (1) {
+        client_socket = accept(listen_socket, (struct sockaddr *)&client_addr, &client_len);
+
+        // Create a client struct
+        client_t *cli = (client_t *)malloc(sizeof(client_t));
+        cli->socket = client_socket;
+        memset(cli->username, 0, BUF_SIZE);
+        memset(cli->channel, 0, BUF_SIZE);
+        memset(cli->room, 0, BUF_SIZE);
+
+        // Add client to the clients array
+        add_client(cli);
+
+        // Create a thread to handle the client
+        pthread_create(&tid, NULL, &handle_client, (void *)cli);
+        pthread_detach(tid);
+    }
+
+    return 0;
+}
+```
+
+berfungsi untuk inisialisasi server socket dan menerima koneksi klien
