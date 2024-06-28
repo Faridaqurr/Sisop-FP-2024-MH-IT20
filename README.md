@@ -1702,6 +1702,66 @@ void list_users(int sock) {
 }
 ```
 
+Fungsi ini akan mengirim daftar user/pengguna yang sudah register ke klien. Fungsi membaca file users.csv dan mengirimkan username yang ditemukan ke klien.
+
+8. `Remove User`
+```
+void remove_user(char *username, int sock) {
+    FILE *fp = fopen(USER_FILE, "r");
+    if (fp == NULL) {
+        perror("Unable to open users.csv");
+        return;
+    }
+
+    FILE *temp_fp = fopen("/home/farida/sisophush/DiscorIT/users_temp.csv", "w");
+    if (temp_fp == NULL) {
+        perror("Unable to open temporary users file");
+        fclose(fp);
+        return;
+    }
+
+    char line[256];
+    int user_found = 0;
+    while (fgets(line, sizeof(line), fp)) {
+        char stored_username[BUF_SIZE], stored_password[BUF_SIZE], stored_role[BUF_SIZE];
+        int id;
+        sscanf(line, "%d,%[^,],%[^,],%s", &id, stored_username, stored_password, stored_role);
+
+        if (strcmp(stored_username, username) == 0) {
+            user_found = 1;
+        } else {
+            fprintf(temp_fp, "%d,%s,%s,%s\n", id, stored_username, stored_password, stored_role);
+        }
+    }
+
+    fclose(fp);
+    fclose(temp_fp);
+
+    if (user_found) {
+        if (remove(USER_FILE) != 0) {
+            perror("Failed to remove original users file");
+            return;
+        }
+
+        if (rename("/home/farida/sisophush/DiscorIT/users_temp.csv", USER_FILE) != 0) {
+            perror("Failed to rename temporary users file");
+            return;
+        }
+
+        char response[] = "User removed successfully.\n";
+        write(sock, response, strlen(response));
+    } else {
+        remove("/home/farida/sisophush/DiscorIT/users_temp.csv");
+        char response[] = "User not found.\n";
+        write(sock, response, strlen(response));
+    }
+}
+
+```
+
+Fungsi ini untuk menghapus user dari users.csv. Fungsi akan membaca file, mencari nama user yang sesuai, dan menghapus data tersebut.
+
+
 berfungsi untuk menangani proses daftar pengguna dengan mengirimkan daftar semua username yang ada dalam file .csv kepada klien
 
 ### Proses
