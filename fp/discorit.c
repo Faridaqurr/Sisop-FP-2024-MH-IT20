@@ -3,122 +3,143 @@
 #include <string.h>
 #include <unistd.h>
 #include <arpa/inet.h>
-#include <crypt.h>
-#include <errno.h>
 
 #define PORT 8080
+#define BUF_SIZE 1024
+#define MAX_NAME_LENGTH 50
 
-void handle_response(int socket);
+void handle_commands(int sock, const char *username) {
+    char buffer[BUF_SIZE] = {0};
+    char channel[MAX_NAME_LENGTH] = {0};
+    char room[MAX_NAME_LENGTH] = {0};
+    int key_prompt = 0;
+    int in_channel = 0;
+    int in_room = 0;
+
+    while (1) {
+        if (key_prompt) {
+            printf("Key: ");
+            fflush(stdout);
+            key_prompt = 0;
+        } else if (in_channel && in_room) {
+            printf("[%s/%s/%s] ", username, channel, room);
+        } else if (in_channel) {
+            printf("[%s/%s] ", username, channel);
+        } else {
+            printf("[%s] ", username);
+        }
+
+        if (fgets(buffer, BUF_SIZE, stdin) == NULL) {
+            break;
+        }
+        buffer[strcspn(buffer, "\n")] = 0;
+
+        if (strcmp(buffer, "EXIT") == 0) {
+            send(sock, buffer, strlen(buffer), 0);
+            if (in_room) {
+                in_room = 0;
+                memset(room, 0, sizeof(room));
+            } else if (in_channel) {
+                in_channel = 0;
+                memset(channel, 0, sizeof(channel));
+            } else {
+                break;
+            }
+        } else {
+            char command[BUF_SIZE] = {0};
+            char name[MAX_NAME_LENGTH] = {0};
+
+            if (sscanf(buffer, "%s %s", command, name) == 2 && strcmp(command, "JOIN") == 0) {
+                if (in_channel && !in_room) {
+                    snprintf(room, sizeof(room), "%s", name);
+                    in_room = 1;
+                } else if (!in_channel) {
+                    snprintf(channel, sizeof(channel), "%s", name);
+                    in_channel = 1;
+                }
+            }
+
+            if (send(sock, buffer, strlen(buffer), 0) == -1) {
+                perror("Send failed");
+                break;
+            }
+        }
+
+        memset(buffer, 0, sizeof(buffer));
+        int bytes_read = read(sock, buffer, BUF_SIZE - 1);
+        if (bytes_read <= 0) {
+            perror("Read failed");
+            break;
+        }
+        buffer[bytes_read] = '\0';
+
+        if (strstr(buffer, "masuk channel")) {
+            char *channel_name = strstr(buffer, "bergabung dengan channel ") + strlen("bergabung dengan channel ");
+            strncpy(channel, channel_name, sizeof(channel) - 1);
+            channel[sizeof(channel) - 1] = '\0';
+            in_channel = 1;
+        } else if (strstr(buffer, "masuk room")) {
+            char *room_name = strstr(buffer, "bergabung dengan room ") + strlen("bergabung dengan room ");
+            strncpy(room, room_name, sizeof(room) - 1);
+            room[sizeof(room) - 1] = '\0';
+            in_room = 1;
+        } else if (strstr(buffer, "Key:")) {
+            key_prompt = 1;
+        }
+
+        printf("%s\n", buffer);
+    }
+}
 
 int main(int argc, char const *argv[]) {
-    if (argc < 3) {
-        fprintf(stderr, "Usage: %s <COMMAND> <ARGS>\n", argv[0]);
+    int sock = 0;
+    struct sockaddr_in serv_addr;
+    char buffer[BUF_SIZE] = {0};
+
+    if (argc < 5) {
+        printf("Usage: ./discorit REGISTER/LOGIN username -p password\n");
         return 1;
     }
 
-    const char *command = argv[1];
-    int sock = 0;
-    struct sockaddr_in serv_addr;
-
     if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
-        printf("\n Socket creation error \n");
-        return -1;
+        perror("Socket creation error");
+        return 1;
     }
 
     serv_addr.sin_family = AF_INET;
     serv_addr.sin_port = htons(PORT);
 
     if (inet_pton(AF_INET, "127.0.0.1", &serv_addr.sin_addr) <= 0) {
-        printf("\nInvalid address/ Address not supported \n");
-        return -1;
-    }
-
-    if (connect(sock, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) {
-        printf("\nConnection Failed \n");
-        return -1;
-    }
-
-    char message[1024] = {0};
-
-    if (strcmp(command, "REGISTER") == 0) {
-        if (argc < 5) {
-            fprintf(stderr, "Usage: %s REGISTER <USERNAME> -p <PASSWORD>\n", argv[0]);
-            return 1;
-        }
-        const char *username = argv[2];
-        const char *password_flag = argv[3];
-        const char *password = argv[4];
-
-        if (strcmp(password_flag, "-p") != 0) {
-            fprintf(stderr, "Invalid usage. Use -p for password.\n");
-            return 1;
-        }
-
-        char *hashed_password = crypt(password, "$6$abcdefghijk$");
-        snprintf(message, sizeof(message), "%s %s %s", command, username, hashed_password);
-
-    } else if (strcmp(command, "LOGIN") == 0) {
-        if (argc < 5) {
-            fprintf(stderr, "Usage: %s LOGIN <USERNAME> -p <PASSWORD>\n", argv[0]);
-            return 1;
-        }
-        const char *username = argv[2];
-        const char *password_flag = argv[3];
-        const char *password = argv[4];
-
-        if (strcmp(password_flag, "-p") != 0) {
-            fprintf(stderr, "Invalid usage. Use -p for password.\n");
-            return 1;
-        }
-
-        char *hashed_password = crypt(password, "$6$abcdefghijk$");
-        snprintf(message, sizeof(message), "%s %s %s", command, username, hashed_password);
-
-    } else if (strcmp(command, "LIST") == 0) {
-        if (argc < 3) {
-            fprintf(stderr, "Usage: %s LIST <CHANNEL|ROOM|USER> [CHANNEL_NAME]\n", argv[0]);
-            return 1;
-        }
-        const char *subcommand = argv[2];
-        if (strcmp(subcommand, "CHANNEL") == 0) {
-            snprintf(message, sizeof(message), "%s CHANNEL", command);
-        } else if (strcmp(subcommand, "ROOM") == 0 && argc == 4) {
-            const char *channel_name = argv[3];
-            snprintf(message, sizeof(message), "%s ROOM %s", command, channel_name);
-        } else if (strcmp(subcommand, "USER") == 0 && argc == 4) {
-            const char *channel_name = argv[3];
-            snprintf(message, sizeof(message), "%s USER %s", command, channel_name);
-        } else {
-            fprintf(stderr, "Invalid LIST command usage\n");
-            return 1;
-        }
-
-    } else if (strcmp(command, "JOIN") == 0) {
-        if (argc < 4) {
-            fprintf(stderr, "Usage: %s JOIN <CHANNEL|ROOM> <NAME> [KEY]\n", argv[0]);
-            return 1;
-        }
-        const char *subcommand = argv[2];
-        const char *name = argv[3];
-        const char *key = argc == 5 ? argv[4] : "";
-
-        snprintf(message, sizeof(message), "%s %s %s %s", command, subcommand, name, key);
-
-    } else {
-        fprintf(stderr, "Unknown command\n");
+        perror("Invalid address/ Address not supported");
         return 1;
     }
 
-    send(sock, message, strlen(message), 0);
-    handle_response(sock);
+    if (connect(sock, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) {
+        perror("Connection Failed");
+        return 1;
+    }
+
+    if (strcmp(argv[1], "REGISTER") == 0 && strcmp(argv[3], "-p") == 0) {
+        snprintf(buffer, BUF_SIZE, "REGISTER %s -p %s", argv[2], argv[4]);
+    } else if (strcmp(argv[1], "LOGIN") == 0 && strcmp(argv[3], "-p") == 0) {
+        snprintf(buffer, BUF_SIZE, "LOGIN %s -p %s", argv[2], argv[4]);
+    } else {
+        printf("Invalid command\n");
+        close(sock);
+        return 1;
+    }
+
+    send(sock, buffer, strlen(buffer), 0);
+    memset(buffer, 0, sizeof(buffer));
+    int bytes_read = read(sock, buffer, BUF_SIZE - 1);
+    if (bytes_read > 0) {
+        buffer[bytes_read] = '\0';
+        printf("%s\n", buffer);
+        if (strstr(buffer, "Login successful") != NULL || strstr(buffer, "Registered successfully") != NULL) {
+            handle_commands(sock, argv[2]);
+        }
+    }
 
     close(sock);
     return 0;
-}
-
-void handle_response(int socket) {
-    char buffer[1024] = {0};
-    int valread = read(socket, buffer, 1024);
-    buffer[valread] = '\0';
-    printf("%s", buffer);
 }
