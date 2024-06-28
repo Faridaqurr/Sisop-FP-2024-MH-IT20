@@ -1723,5 +1723,16 @@ berfungsi untuk menangani proses daftar pengguna dengan mengirimkan daftar semua
 
 ![WhatsApp Image 2024-06-28 at 11 07 32 PM](https://github.com/Faridaqurr/Sisop-FP-2024-MH-IT20/assets/150936800/de42853e-619a-4e31-b457-0e123c89a861)
 
+5. Create Channel
 
-##Revisi
+![WhatsApp Image 2024-06-28 at 11 19 51 PM](https://github.com/Faridaqurr/Sisop-FP-2024-MH-IT20/assets/150936800/5823d751-3886-4aa9-9cdc-49b5b6c34b84)
+
+6. Channel.csv
+
+![WhatsApp Image 2024-06-28 at 11 20 27 PM](https://github.com/Faridaqurr/Sisop-FP-2024-MH-IT20/assets/150936800/a4bca889-d7b4-4c0b-b2c4-c43d5056f6a8)
+
+7. User.log
+
+![WhatsApp Image 2024-06-28 at 11 21 17 PM](https://github.com/Faridaqurr/Sisop-FP-2024-MH-IT20/assets/150936800/89226654-4a4e-4437-8ed6-77279b1a8687)
+
+## Revisi
